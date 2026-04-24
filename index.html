@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#C29B6E">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<title>Lesa's Book</title>
+<link rel="manifest" href="./manifest.json">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;500;600;700&family=Noto+Serif+JP:wght@400;500;600;700&family=Playfair+Display:wght@600&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;overflow-x:hidden}
+body{background:#F7F4EF;font-family:'Noto Serif SC','Hiragino Mincho ProN','Yu Mincho','Source Han Serif SC',Georgia,serif;color:#3A3530;-webkit-font-smoothing:antialiased}
+ruby rt{font-size:0.55em;color:#B5AA9A}
+input,textarea,button{font-family:inherit;outline:none}
+@keyframes fadeInUp{from{opacity:0;transform:translateX(-50%) translateY(10px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js"></script>
+<script>
+const{useState,useRef,useCallback}=React;
+const h=React.createElement;
+
+/* ═══ Storage ═══ */
+const LS=k=>{try{return JSON.parse(localStorage.getItem("lb2_"+k))}catch{return null}};
+const SS=(k,v)=>{try{localStorage.setItem("lb2_"+k,JSON.stringify(v))}catch{}};
+const fmtDate=d=>{const dt=d instanceof Date?d:new Date(d);return`${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,"0")}-${String(dt.getDate()).padStart(2,"0")}`};
+const TODAY=fmtDate(new Date());
+const NOW=new Date();
+const WKCN=["日","一","二","三","四","五","六"];
+const WKJP=["日","月","火","水","木","金","土"];
+
+/* ═══ Furigana phrases ═══ */
+const GREETINGS=[
+{cn:"又是新的一天，慢慢来",jp:"<ruby>新<rt>あたら</rt></ruby>しい<ruby>一日<rt>いちにち</rt></ruby>、ゆっくりね"},
+{cn:"今天也要好好对自己",jp:"<ruby>今日<rt>きょう</rt></ruby>も<ruby>自分<rt>じぶん</rt></ruby>を<ruby>大切<rt>たいせつ</rt></ruby>に"},
+{cn:"能打开这里，就已经很好了",jp:"ここを<ruby>開<rt>あ</rt></ruby>けただけで、もう<ruby>十分<rt>じゅうぶん</rt></ruby>"},
+{cn:"不用完美，做了就算",jp:"<ruby>完璧<rt>かんぺき</rt></ruby>じゃなくていい、やっただけで<ruby>十分<rt>じゅうぶん</rt></ruby>"},
+{cn:"每一小步都在积累",jp:"<ruby>小<rt>ちい</rt></ruby>さな<ruby>一歩<rt>いっぽ</rt></ruby>も<ruby>積<rt>つ</rt></ruby>み<ruby>重<rt>かさ</rt></ruby>ね"},
+{cn:"你比想象中走得更远了",jp:"<ruby>思<rt>おも</rt></ruby>ったより<ruby>遠<rt>とお</rt></ruby>くまで<ruby>来<rt>き</rt></ruby>たよ"},
+{cn:"深呼吸，然后开始吧",jp:"<ruby>深呼吸<rt>しんこきゅう</rt></ruby>して、<ruby>始<rt>はじ</rt></ruby>めよう"},
+{cn:"不急，先看看昨天的自己",jp:"<ruby>焦<rt>あせ</rt></ruby>らないで、<ruby>昨日<rt>きのう</rt></ruby>の<ruby>自分<rt>じぶん</rt></ruby>を<ruby>見<rt>み</rt></ruby>てみよう"},
+{cn:"今天想做什么，就做什么",jp:"<ruby>今日<rt>きょう</rt></ruby>やりたいことを、やろう"},
+{cn:"累了就休息，这也是进步",jp:"<ruby>疲<rt>つか</rt></ruby>れたら<ruby>休<rt>やす</rt></ruby>む、それも<ruby>前進<rt>ぜんしん</rt></ruby>"},
+];
+const REWARDS=[
+{cn:"又多了一片叶子 🌿",jp:"また<ruby>一枚<rt>いちまい</rt></ruby>、<ruby>葉<rt>は</rt></ruby>が<ruby>増<rt>ふ</rt></ruby>えた"},
+{cn:"今天的你，值得被记住 ✨",jp:"<ruby>今日<rt>きょう</rt></ruby>のあなたは、<ruby>記憶<rt>きおく</rt></ruby>に<ruby>値<rt>あたい</rt></ruby>する"},
+{cn:"小小一步，稳稳地走 🐾",jp:"<ruby>小<rt>ちい</rt></ruby>さな<ruby>一歩<rt>いっぽ</rt></ruby>、しっかりと"},
+{cn:"这份记录，未来的你会感谢的 📖",jp:"この<ruby>記録<rt>きろく</rt></ruby>、<ruby>未来<rt>みらい</rt></ruby>の<ruby>自分<rt>じぶん</rt></ruby>がきっと<ruby>感謝<rt>かんしゃ</rt></ruby>する"},
+{cn:"好事正在发生 🍀",jp:"いいことが<ruby>起<rt>お</rt></ruby>きている"},
+];
+const todayGreeting=GREETINGS[Math.floor((new Date(TODAY).getTime()/86400000))%GREETINGS.length];
+const getReward=()=>REWARDS[Math.floor(Math.random()*REWARDS.length)];
+
+const DEF_HABITS=[
+{id:"aesthetic",name:"审美练习",jp:"審美トレーニング",emoji:"🎨",desc:"看一张好图，或存一个参考"},
+{id:"japanese",name:"日语单词",jp:"日本語単語",emoji:"📖",desc:"背单词，复习，或听一段日语"},
+];
+
+function init(){return{todos:LS("todos")||[],habits:LS("habits")||DEF_HABITS,checkins:LS("checkins")||{},notes:LS("notes")||[],settings:LS("settings")||{reminderTime:"21:00"}}}
+function calcStreak(ck,hid){let s=0;for(let i=0;i<365;i++){const d=new Date(NOW);d.setDate(d.getDate()-i);if(ck[fmtDate(d)+"_"+hid])s++;else if(i===0)continue;else break}return s}
+function calcTotal(ck,hid){return Object.keys(ck).filter(k=>k.endsWith("_"+hid)&&ck[k]).length}
+
+/* ═══ Colors & Styles ═══ */
+const C={bg:"#F7F4EF",card:"#FEFCF9",bdr:"#E4DDD3",tx:"#3A3530",tx2:"#847A6E",tx3:"#B5AA9A",acc:"#8BA87A",accL:"#C5D4B3",warm:"#C29B6E",warmL:"#EDDCC8"};
+const ft="'Noto Serif SC','Hiragino Mincho ProN','Yu Mincho',Georgia,serif";
+const ftJp="'Hiragino Mincho ProN','Yu Mincho','Noto Serif JP',serif";
+
+/* ═══════════════ MAIN APP ═══════════════ */
+function App(){
+  const[st,setSt]=useState(init);
+  const[tab,setTab]=useState("today");
+  const[sub,setSub]=useState(null);
+  const save=(k,v)=>SS(k,v);
+  const up=fn=>setSt(p=>{const n=fn(p);Object.keys(n).forEach(k=>{if(n[k]!==p[k])save(k,n[k])});return n});
+  const dateLabel=`${NOW.getMonth()+1}月${NOW.getDate()}日（${WKJP[NOW.getDay()]}）`;
+
+  return h('div',{style:{maxWidth:400,margin:"0 auto",minHeight:"100vh",backgroundColor:C.bg,fontFamily:ft,color:C.tx,position:"relative",paddingBottom:72}},
+    // Grain texture
+    h('div',{style:{position:"fixed",top:0,left:0,right:0,bottom:0,opacity:.08,backgroundImage:"url(\"data:image/svg+xml,%3Csvg width='4' height='4' viewBox='0 0 4 4' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 3h1v1H1V3zm2-2h1v1H3V1z' fill='%23000' fill-opacity='0.15'/%3E%3C/svg%3E\")",pointerEvents:"none",zIndex:0}}),
+    // Header
+    h('header',{style:{position:"relative",zIndex:1,padding:"20px 22px 14px"}},
+      h('div',{style:{display:"flex",justifyContent:"space-between",alignItems:"baseline"}},
+        h('span',{style:{fontSize:20,fontWeight:600,color:C.warm,letterSpacing:1,fontFamily:"'Playfair Display',Georgia,"+ft}},"Lesa's Book"),
+        h('span',{style:{fontSize:12,color:C.tx3,fontFamily:ftJp}},dateLabel)
+      )
+    ),
+    // Content
+    h('main',{style:{position:"relative",zIndex:1}},
+      tab==="today"&&h(TodayTab,{st,up}),
+      tab==="habits"&&h(HabitsTab,{st,up,sub,setSub}),
+      tab==="stats"&&h(StatsTab,{st}),
+      tab==="me"&&h(MeTab,{st,up})
+    ),
+    // Nav
+    h('nav',{style:{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:400,display:"flex",backgroundColor:C.card+"F0",borderTop:"1px solid "+C.bdr+"80",padding:"8px 0 env(safe-area-inset-bottom,6px)",zIndex:10,backdropFilter:"blur(10px)"}},
+      [{id:"today",cn:"今日",jp:"きょう"},{id:"habits",cn:"习惯",jp:"しゅうかん"},{id:"stats",cn:"统计",jp:"とうけい"},{id:"me",cn:"我的",jp:"わたし"}].map(t=>
+        h('button',{key:t.id,onClick:()=>{setTab(t.id);setSub(null)},style:{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:1,padding:"6px 0",background:"none",border:"none",cursor:"pointer",opacity:tab===t.id?1:.35,transition:"opacity 0.2s"}},
+          h('span',{style:{fontSize:12,color:C.tx,fontWeight:500}},t.cn),
+          h('span',{style:{fontSize:8,color:C.tx3,fontFamily:ftJp}},t.jp)
+        )
+      )
+    )
+  );
+}
+
+/* ═══════════════ TODAY TAB ═══════════════ */
+function TodayTab({st,up}){
+  const[newTodo,setNewTodo]=useState("");
+  const[diary,setDiary]=useState(null);
+  const[noteText,setNoteText]=useState("");
+  const[quickNote,setQuickNote]=useState("");
+  const[showNote,setShowNote]=useState(false);
+  const[reward,setReward]=useState(null);
+
+  const todos=st.todos.filter(t=>t.date===TODAY);
+  const canAdd=todos.length<3;
+  const habits=st.habits.map(hb=>({...hb,done:!!st.checkins[TODAY+"_"+hb.id],total:calcTotal(st.checkins,hb.id),level:st.checkins[TODAY+"_"+hb.id]?.level}));
+  const yd=new Date(NOW);yd.setDate(yd.getDate()-1);const ydStr=fmtDate(yd);
+  const ydNotes=st.notes.filter(n=>n.date===ydStr);
+  const ydCheckins=st.habits.filter(hb=>st.checkins[ydStr+"_"+hb.id]);
+
+  const addTodo=()=>{if(!newTodo.trim()||!canAdd)return;up(s=>({...s,todos:[...s.todos,{id:Date.now()+"",text:newTodo.trim(),date:TODAY,done:false}]}));setNewTodo("")};
+  const toggleTodo=id=>up(s=>({...s,todos:s.todos.map(t=>t.id===id?{...t,done:!t.done}:t)}));
+  const delTodo=id=>up(s=>({...s,todos:s.todos.filter(t=>t.id!==id)}));
+
+  const doCheckin=(level)=>{setDiary(d=>({...d,step:"note",level}))};
+  const finishCheckin=()=>{const{habitId,level}=diary;const key=TODAY+"_"+habitId;up(s=>({...s,checkins:{...s.checkins,[key]:{level,time:new Date().toISOString(),note:noteText.trim()}},...(noteText.trim()?{notes:[...s.notes,{id:Date.now()+"",text:noteText.trim(),date:TODAY,time:new Date().toLocaleTimeString("zh-CN",{hour:"2-digit",minute:"2-digit"}),habitId}]}:{})}));setNoteText("");const r=getReward();setReward(r);setDiary(null);setTimeout(()=>setReward(null),3000)};
+  const skipNote=()=>{const{habitId,level}=diary;const key=TODAY+"_"+habitId;up(s=>({...s,checkins:{...s.checkins,[key]:{level,time:new Date().toISOString(),note:""}}}));const r=getReward();setReward(r);setDiary(null);setTimeout(()=>setReward(null),3000)};
+  const saveQuickNote=()=>{if(!quickNote.trim())return;up(s=>({...s,notes:[...s.notes,{id:Date.now()+"",text:quickNote.trim(),date:TODAY,time:new Date().toLocaleTimeString("zh-CN",{hour:"2-digit",minute:"2-digit"})}]}));setQuickNote("");setShowNote(false)};
+
+  const todayNotes=st.notes.filter(n=>n.date===TODAY);
+  const pg={padding:"0 16px 16px"};
+  const card={backgroundColor:C.card,borderRadius:14,padding:"18px 20px",marginBottom:12,border:"1px solid "+C.bdr+"50"};
+  const cardHead={display:"flex",alignItems:"baseline",gap:8,marginBottom:14};
+
+  // Diary modal
+  if(diary){
+    const hb=st.habits.find(x=>x.id===diary.habitId);
+    if(diary.step==="level")return h('div',{style:pg},h('div',{style:{maxWidth:320,margin:"40px auto 0",textAlign:"center",padding:"32px 24px",backgroundColor:C.card,borderRadius:18,border:"1px solid "+C.bdr+"50"}},
+      h('div',{style:{fontSize:40,marginBottom:12}},hb.emoji),
+      h('div',{style:{fontSize:18,fontWeight:600,marginBottom:2}},hb.name),
+      h('div',{style:{fontSize:12,color:C.tx3,fontFamily:ftJp,marginBottom:20}},hb.jp),
+      h('div',{style:{fontSize:14,color:C.tx2,marginBottom:20}},"今天做了吗？"),
+      h('button',{style:{width:"100%",padding:12,fontSize:13,backgroundColor:C.acc,color:"#fff",border:"none",borderRadius:10,cursor:"pointer",fontFamily:ft,fontWeight:500,marginBottom:8},onClick:()=>doCheckin("full")},"认真做了 ◎"),
+      h('button',{style:{width:"100%",padding:12,fontSize:12,backgroundColor:"transparent",color:C.tx2,border:"1px dashed "+C.bdr,borderRadius:10,cursor:"pointer",fontFamily:ft,marginBottom:8},onClick:()=>doCheckin("min")},"碰了一下 ○"),
+      h('button',{style:{width:"100%",padding:10,fontSize:12,color:C.tx3,backgroundColor:"transparent",border:"none",cursor:"pointer",fontFamily:ft},onClick:()=>setDiary(null)},"还没做")
+    ));
+    if(diary.step==="note")return h('div',{style:pg},h('div',{style:{maxWidth:320,margin:"40px auto 0",textAlign:"center",padding:"32px 24px",backgroundColor:C.card,borderRadius:18,border:"1px solid "+C.bdr+"50"}},
+      h('div',{style:{fontSize:40,marginBottom:12}},hb.emoji),
+      h('div',{style:{fontSize:15,color:C.tx,marginBottom:4,fontWeight:500}},"想记点什么吗？"),
+      h('div',{style:{fontSize:11,color:C.tx3,fontFamily:ftJp,marginBottom:16}},"何かメモしたいことは？"),
+      h('textarea',{style:{width:"100%",padding:12,border:"1px solid "+C.bdr,borderRadius:10,fontSize:13,fontFamily:ft,color:C.tx,backgroundColor:C.bg,resize:"none",outline:"none",boxSizing:"border-box",lineHeight:1.6,marginBottom:16},value:noteText,onChange:e=>setNoteText(e.target.value),placeholder:"一个字也行，留白也行...",rows:3,autoFocus:true}),
+      h('button',{style:{width:"100%",padding:12,fontSize:13,backgroundColor:C.acc,color:"#fff",border:"none",borderRadius:10,cursor:"pointer",fontFamily:ft,fontWeight:500,marginBottom:8},onClick:finishCheckin},noteText.trim()?"保存并完成":"跳过，完成打卡"),
+      h('button',{style:{width:"100%",padding:10,fontSize:11,color:C.tx3,backgroundColor:"transparent",border:"none",cursor:"pointer",fontFamily:ft},onClick:skipNote},"直接跳过")
+    ));
+  }
+
+  return h('div',{style:pg},
+    // Reward toast
+    reward&&h('div',{style:{position:"fixed",top:80,left:"50%",transform:"translateX(-50%)",zIndex:100,backgroundColor:C.card,border:"1px solid "+C.accL,borderRadius:14,padding:"14px 24px",textAlign:"center",boxShadow:"0 4px 20px "+C.bdr+"60",animation:"fadeInUp 0.4s ease"}},
+      h('div',{style:{fontSize:14,color:C.acc,fontWeight:500}},reward.cn),
+      h('div',{style:{fontSize:12,color:C.tx2,fontFamily:ftJp,marginTop:4,lineHeight:2.2},dangerouslySetInnerHTML:{__html:reward.jp}})
+    ),
+    // Calibration
+    h('section',{style:{padding:"20px 22px",marginBottom:4,textAlign:"center"}},
+      h('div',{style:{fontSize:16,lineHeight:1.8,color:C.tx2}},todayGreeting.cn),
+      h('div',{style:{fontSize:14,color:C.tx2,fontFamily:ftJp,marginTop:8,lineHeight:2.2},dangerouslySetInnerHTML:{__html:todayGreeting.jp}}),
+      (ydCheckins.length>0||ydNotes.length>0)&&h('div',{style:{marginTop:16,padding:"12px 16px",backgroundColor:C.card,borderRadius:12,border:"1px solid "+C.bdr+"60",textAlign:"left"}},
+        h('div',{style:{fontSize:10,color:C.tx3,fontFamily:ftJp,marginBottom:6}},"昨日の記録"),
+        ...ydCheckins.map(hb=>h('span',{key:hb.id,style:{display:"inline-block",fontSize:11,color:C.tx2,backgroundColor:C.warmL,padding:"2px 8px",borderRadius:10,marginRight:6,marginBottom:4}},hb.emoji+" "+hb.name)),
+        ydNotes.length>0&&h('div',{style:{fontSize:12,color:C.tx2,fontStyle:"italic",marginTop:6,lineHeight:1.5}},'"'+ydNotes[ydNotes.length-1].text.slice(0,40)+(ydNotes[ydNotes.length-1].text.length>40?"...":"")+'"')
+      )
+    ),
+    // Habits checkin
+    h('section',{style:card},
+      h('div',{style:cardHead},h('span',{style:{fontSize:14,fontWeight:600}},"今日打卡"),h('span',{style:{fontSize:10,color:C.tx3,fontFamily:ftJp}},"チェックイン")),
+      ...habits.map(hb=>h('div',{key:hb.id,style:{display:"flex",alignItems:"center",gap:12,padding:"12px 0",borderBottom:"1px solid "+C.bdr+"30"}},
+        h('span',{style:{fontSize:22,width:32,textAlign:"center"}},hb.emoji),
+        h('div',{style:{flex:1}},h('span',{style:{fontSize:14,fontWeight:500,display:"block"}},hb.name),h('span',{style:{fontSize:10,color:C.tx3,display:"block",marginTop:1}},hb.total+"日 累計")),
+        hb.done?h('div',{style:{width:36,height:36,borderRadius:"50%",backgroundColor:C.accL,display:"flex",alignItems:"center",justifyContent:"center"}},h('span',{style:{color:C.acc,fontSize:14,fontWeight:600}},hb.level==="full"?"◎":"○")):h('button',{style:{padding:"8px 16px",fontSize:12,backgroundColor:C.warmL,color:C.warm,border:"none",borderRadius:20,cursor:"pointer",fontFamily:ft,fontWeight:500},onClick:()=>setDiary({habitId:hb.id,step:"level"})},"打卡")
+      ))
+    ),
+    // Todos
+    h('section',{style:card},
+      h('div',{style:cardHead},h('span',{style:{fontSize:14,fontWeight:600}},"待办"),h('span',{style:{fontSize:10,color:C.tx3,fontFamily:ftJp}},"やること"),h('span',{style:{marginLeft:"auto",fontSize:11,color:C.tx3}},todos.filter(t=>t.done).length+"/"+todos.length)),
+      ...todos.map(t=>h('div',{key:t.id,style:{display:"flex",alignItems:"center",gap:10,padding:"10px 0",borderBottom:"1px solid "+C.bdr+"25"}},
+        h('button',{style:{width:20,height:20,borderRadius:"50%",border:"1.5px solid "+(t.done?C.acc:C.bdr),backgroundColor:t.done?C.acc:"transparent",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,color:t.done?"#fff":C.acc,flexShrink:0},onClick:()=>toggleTodo(t.id)},t.done&&"✓"),
+        h('span',{style:{flex:1,fontSize:13,lineHeight:1.5,...(t.done?{textDecoration:"line-through",color:C.tx3}:{})}},t.text),
+        h('button',{style:{background:"none",border:"none",color:C.tx3,fontSize:14,cursor:"pointer",opacity:.4},onClick:()=>delTodo(t.id)},"×")
+      )),
+      canAdd?h('div',{style:{display:"flex",gap:8,marginTop:10}},
+        h('input',{style:{flex:1,padding:"9px 12px",border:"1px dashed "+C.bdr,borderRadius:8,fontSize:12,backgroundColor:"transparent",color:C.tx,fontFamily:ft,outline:"none"},value:newTodo,onChange:e=>setNewTodo(e.target.value),placeholder:todos.length===0?"今天最重要的事？":"还有吗？（最多3件）",onKeyDown:e=>e.key==="Enter"&&addTodo(),maxLength:40}),
+        h('button',{style:{width:32,height:32,borderRadius:"50%",border:"1px solid "+C.bdr,backgroundColor:C.warmL,color:C.warm,fontSize:16,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"},onClick:addTodo},"+")
+      ):h('div',{style:{fontSize:11,color:C.tx3,textAlign:"center",padding:"8px 0",fontStyle:"italic"}},"三件够了，做完再说 ☺")
+    ),
+    // Notes
+    h('section',{style:card},
+      h('div',{style:cardHead},h('span',{style:{fontSize:14,fontWeight:600}},"随手记"),h('span',{style:{fontSize:10,color:C.tx3,fontFamily:ftJp}},"メモ"),!showNote&&h('button',{style:{marginLeft:"auto",background:"none",border:"none",color:C.warm,fontSize:12,cursor:"pointer",fontFamily:ft},onClick:()=>setShowNote(true)},"+ 写点什么")),
+      showNote&&h('div',{style:{marginTop:6}},
+        h('textarea',{style:{width:"100%",padding:"10px 12px",border:"1px solid "+C.bdr,borderRadius:10,fontSize:12,fontFamily:ft,color:C.tx,backgroundColor:C.bg,resize:"vertical",outline:"none",boxSizing:"border-box",lineHeight:1.6},value:quickNote,onChange:e=>setQuickNote(e.target.value),placeholder:"随便写...",rows:2,autoFocus:true}),
+        h('div',{style:{display:"flex",gap:8,marginTop:6,justifyContent:"flex-end"}},
+          h('button',{style:{padding:"7px 16px",fontSize:12,backgroundColor:C.acc,color:"#fff",border:"none",borderRadius:8,cursor:"pointer",fontFamily:ft},onClick:saveQuickNote},"保存"),
+          h('button',{style:{padding:"7px 12px",fontSize:12,backgroundColor:"transparent",color:C.tx3,border:"none",cursor:"pointer",fontFamily:ft},onClick:()=>{setShowNote(false);setQuickNote("")}},"取消")
+        )
+      ),
+      ...todayNotes.map(n=>h('div',{key:n.id,style:{padding:"6px 0",borderBottom:"1px solid "+C.bdr+"20"}},h('span',{style:{fontSize:10,color:C.tx3,display:"block"}},n.time),h('span',{style:{fontSize:12,lineHeight:1.6,color:C.tx2}},n.text))),
+      !todayNotes.length&&!showNote&&h('div',{style:{fontSize:11,color:C.tx3,textAlign:"center",padding:"6px 0",fontStyle:"italic"}},"今天还没写过什么")
+    )
+  );
+}
+
+/* ═══════════════ HABITS TAB ═══════════════ */
+function HabitsTab({st,up,sub,setSub}){
+  const[nm,setNm]=useState("");
+  const[jp,setJp]=useState("");
+  const[em,setEm]=useState("✦");
+  const[desc,setDesc]=useState("");
+  const pg={padding:"0 16px 16px"};
+  const card={backgroundColor:C.card,borderRadius:14,padding:"18px 20px",marginBottom:12,border:"1px solid "+C.bdr+"50"};
+
+  const addH=()=>{if(!nm.trim())return;up(s=>({...s,habits:[...s.habits,{id:Date.now()+"",name:nm.trim(),jp:jp.trim()||nm.trim(),emoji:em,desc:desc.trim()}]}));setNm("");setJp("");setEm("✦");setDesc("");setSub(null)};
+
+  if(sub==="add")return h('div',{style:pg},
+    h('button',{style:{background:"none",border:"none",color:C.tx2,fontSize:13,cursor:"pointer",padding:"6px 0",fontFamily:ft,marginBottom:8},onClick:()=>setSub(null)},"← 戻る"),
+    h('section',{style:card},
+      h('div',{style:{fontSize:15,fontWeight:600,marginBottom:18,textAlign:"center"}},"新しい習慣を追加"),
+      h('div',{style:{marginBottom:14}},h('label',{style:{fontSize:11,color:C.tx2,display:"block",marginBottom:4}},"名称"),h('input',{style:{width:"100%",padding:"9px 12px",border:"1px solid "+C.bdr,borderRadius:8,fontSize:13,fontFamily:ft,color:C.tx,backgroundColor:C.bg,outline:"none",boxSizing:"border-box"},value:nm,onChange:e=>setNm(e.target.value),placeholder:"比如：冥想、跑步..."})),
+      h('div',{style:{marginBottom:14}},h('label',{style:{fontSize:11,color:C.tx2,display:"block",marginBottom:4}},"日本語名"),h('input',{style:{width:"100%",padding:"9px 12px",border:"1px solid "+C.bdr,borderRadius:8,fontSize:13,fontFamily:ft,color:C.tx,backgroundColor:C.bg,outline:"none",boxSizing:"border-box"},value:jp,onChange:e=>setJp(e.target.value),placeholder:"例：瞑想、ランニング..."})),
+      h('div',{style:{marginBottom:14}},h('label',{style:{fontSize:11,color:C.tx2,display:"block",marginBottom:4}},"说明"),h('input',{style:{width:"100%",padding:"9px 12px",border:"1px solid "+C.bdr,borderRadius:8,fontSize:13,fontFamily:ft,color:C.tx,backgroundColor:C.bg,outline:"none",boxSizing:"border-box"},value:desc,onChange:e=>setDesc(e.target.value),placeholder:"一句话描述..."})),
+      h('div',{style:{marginBottom:14}},h('label',{style:{fontSize:11,color:C.tx2,display:"block",marginBottom:4}},"图标"),h('div',{style:{display:"flex",flexWrap:"wrap",gap:6}},..."✦📚🏃🧘✍️🎵💪🌱☕🎯🎨📖".split(/(?=[\u2700-\u27BF]|[\uD83C-\uDBFF][\uDC00-\uDFFF]|✦|✍️)/).filter(Boolean).map(e=>h('button',{key:e,style:{width:34,height:34,borderRadius:8,border:"1px solid "+(em===e?C.warm:C.bdr),backgroundColor:em===e?C.warmL:"transparent",fontSize:16,cursor:"pointer"},onClick:()=>setEm(e)},e)))),
+      h('button',{style:{width:"100%",padding:12,fontSize:13,backgroundColor:C.acc,color:"#fff",border:"none",borderRadius:10,cursor:"pointer",fontFamily:ft,fontWeight:500,marginTop:8},onClick:addH},"创建 · 作成する")
+    )
+  );
+
+  const weekDates=(()=>{const ds=[];const b=new Date(NOW);b.setDate(b.getDate()-b.getDay());for(let i=0;i<7;i++){const d=new Date(b);d.setDate(d.getDate()+i);ds.push(fmtDate(d))}return ds})();
+
+  return h('div',{style:pg},
+    ...st.habits.map(hb=>{
+      const streak=calcStreak(st.checkins,hb.id);const total=calcTotal(st.checkins,hb.id);
+      return h('section',{key:hb.id,style:card},
+        h('div',{style:{display:"flex",alignItems:"center",gap:12}},h('span',{style:{fontSize:28}},hb.emoji),h('div',{style:{flex:1}},h('div',{style:{fontSize:16,fontWeight:600}},hb.name),h('div',{style:{fontSize:11,color:C.tx3,fontFamily:ftJp}},hb.jp))),
+        hb.desc&&h('div',{style:{fontSize:11,color:C.tx3,marginTop:6,lineHeight:1.5}},hb.desc),
+        h('div',{style:{display:"flex",justifyContent:"center",alignItems:"center",gap:28,padding:"16px 0 8px"}},
+          h('div',{style:{textAlign:"center"}},h('div',{style:{fontSize:24,fontWeight:700,color:C.acc,lineHeight:1}},streak),h('div',{style:{fontSize:10,color:C.tx3,marginTop:4,fontFamily:ftJp}},"連続")),
+          h('div',{style:{width:1,height:24,backgroundColor:C.bdr}}),
+          h('div',{style:{textAlign:"center"}},h('div',{style:{fontSize:24,fontWeight:700,color:C.acc,lineHeight:1}},total),h('div',{style:{fontSize:10,color:C.tx3,marginTop:4,fontFamily:ftJp}},"累計"))
+        ),
+        h('div',{style:{display:"flex",justifyContent:"center",gap:8,paddingTop:4}},
+          ...weekDates.map(ds=>{const ck=st.checkins[ds+"_"+hb.id];const isT=ds===TODAY;const d=new Date(ds+"T00:00:00");
+            return h('div',{key:ds,style:{display:"flex",flexDirection:"column",alignItems:"center",gap:4}},
+              h('span',{style:{fontSize:9,color:C.tx3}},WKCN[d.getDay()]),
+              h('div',{style:{width:24,height:24,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",backgroundColor:ck?(ck.level==="full"?"#8BA87A":"#C5D4B3"):"rgba(200,190,178,"+(isT?"0":"0.25")+")",border:isT&&!ck?"1.5px dashed #C0B5A5":"1.5px solid transparent"}},ck&&h('span',{style:{color:"#fff",fontSize:9}},"✓"))
+            )})
+        )
+      )
+    }),
+    h('button',{style:{width:"100%",padding:14,fontSize:12,color:C.warm,backgroundColor:"transparent",border:"1px dashed "+C.bdr,borderRadius:12,cursor:"pointer",fontFamily:ft},onClick:()=>setSub("add")},"+ 添加新习惯")
+  );
+}
+
+/* ═══════════════ STATS TAB ═══════════════ */
+function StatsTab({st}){
+  const pg={padding:"0 16px 16px"};
+  const card={backgroundColor:C.card,borderRadius:14,padding:"18px 20px",marginBottom:12,border:"1px solid "+C.bdr+"50"};
+  const cardHead={display:"flex",alignItems:"baseline",gap:8,marginBottom:14};
+  const monthDates=(()=>{const f=new Date(NOW.getFullYear(),NOW.getMonth(),1);const l=new Date(NOW.getFullYear(),NOW.getMonth()+1,0);const ds=[];for(let i=0;i<f.getDay();i++)ds.push(null);for(let d=1;d<=l.getDate();d++)ds.push(fmtDate(new Date(NOW.getFullYear(),NOW.getMonth(),d)));return ds})();
+  const intensity=ds=>{if(!ds)return 0;let c=0;st.habits.forEach(hb=>{if(st.checkins[ds+"_"+hb.id])c++});return c};
+  const totalDays=new Set(Object.keys(st.checkins).map(k=>k.split("_")[0])).size;
+  const totalCk=Object.keys(st.checkins).length;
+  const totalNotes=st.notes.length;
+
+  return h('div',{style:pg},
+    h('section',{style:card},
+      h('div',{style:cardHead},h('span',{style:{fontSize:14,fontWeight:600}},"成长概览"),h('span',{style:{fontSize:10,color:C.tx3,fontFamily:ftJp}},"成長の概要")),
+      h('div',{style:{display:"flex",gap:10}},
+        ...[{n:totalDays,l:"活跃天"},{n:totalCk,l:"打卡次"},{n:totalNotes,l:"笔记"}].map(x=>h('div',{key:x.l,style:{flex:1,textAlign:"center",padding:"12px 6px",backgroundColor:C.bg,borderRadius:10,border:"1px solid "+C.bdr+"40"}},h('div',{style:{fontSize:22,fontWeight:700,color:C.acc}},x.n),h('div',{style:{fontSize:10,color:C.tx3,marginTop:3}},x.l)))
+      )
+    ),
+    h('section',{style:card},
+      h('div',{style:cardHead},h('span',{style:{fontSize:14,fontWeight:600}},(NOW.getMonth()+1)+"月"),h('span',{style:{fontSize:10,color:C.tx3,fontFamily:ftJp}},"ヒートマップ")),
+      h('div',{style:{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3,marginTop:10}},...WKCN.map(d=>h('span',{key:d,style:{fontSize:9,color:C.tx3,textAlign:"center"}},d))),
+      h('div',{style:{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3}},
+        ...monthDates.map((ds,i)=>{if(!ds)return h('div',{key:"e"+i,style:{aspectRatio:"1",borderRadius:4}});const v=intensity(ds);const isT=ds===TODAY;const fills=["rgba(200,190,178,0.15)","#E2D9C8","#C5D4B3","#8BA87A","#5E7A4A"];return h('div',{key:ds,style:{aspectRatio:"1",borderRadius:5,display:"flex",alignItems:"center",justifyContent:"center",backgroundColor:fills[Math.min(v,4)],border:isT?"1.5px solid #9A8B78":"none"}},h('span',{style:{fontSize:9,color:v>1?"#fff":"#B5AA9A",lineHeight:1}},new Date(ds+"T00:00:00").getDate()))})
+      ),
+      h('div',{style:{display:"flex",alignItems:"center",justifyContent:"flex-end",gap:3,marginTop:6}},h('span',{style:{fontSize:10,color:"#B5AA9A"}},"少"),
+        ...["rgba(200,190,178,0.15)","#E2D9C8","#C5D4B3","#8BA87A","#5E7A4A"].map((c,i)=>h('div',{key:i,style:{width:12,height:12,backgroundColor:c,borderRadius:3}})),
+        h('span',{style:{fontSize:10,color:"#B5AA9A"}},"多")
+      )
+    ),
+    h('section',{style:card},
+      h('div',{style:cardHead},h('span',{style:{fontSize:14,fontWeight:600}},"各习惯"),h('span',{style:{fontSize:10,color:C.tx3,fontFamily:ftJp}},"習慣ごと")),
+      ...st.habits.map(hb=>{const t=calcTotal(st.checkins,hb.id);const s=calcStreak(st.checkins,hb.id);return h('div',{key:hb.id,style:{display:"flex",alignItems:"center",gap:8,padding:"8px 0",borderBottom:"1px solid "+C.bdr+"20"}},h('span',{style:{fontSize:16}},hb.emoji),h('span',{style:{flex:1,fontSize:13}},hb.name),h('span',{style:{fontSize:10,padding:"2px 7px",backgroundColor:C.accL,color:"#4A6940",borderRadius:8}},s+"日連続"),h('span',{style:{fontSize:10,color:C.tx3}},t+"日累計"))})
+    ),
+    st.notes.length>0&&h('section',{style:card},
+      h('div',{style:cardHead},h('span',{style:{fontSize:14,fontWeight:600}},"最近の記録")),
+      ...st.notes.slice(-5).reverse().map(n=>h('div',{key:n.id,style:{padding:"6px 0",borderBottom:"1px solid "+C.bdr+"20"}},h('span',{style:{fontSize:9,color:C.tx3,display:"block"}},n.date+" "+n.time),h('span',{style:{fontSize:12,color:C.tx2,lineHeight:1.5}},n.text)))
+    )
+  );
+}
+
+/* ═══════════════ ME TAB ═══════════════ */
+function MeTab({st,up}){
+  const pg={padding:"0 16px 16px"};
+  const card={backgroundColor:C.card,borderRadius:14,padding:"18px 20px",marginBottom:12,border:"1px solid "+C.bdr+"50"};
+  const cardHead={display:"flex",alignItems:"baseline",gap:8,marginBottom:14};
+  const importRef=useRef(null);
+  const doExport=()=>{const d=JSON.stringify(st,null,2);const b=new Blob([d],{type:"application/json"});const u=URL.createObjectURL(b);const a=document.createElement("a");a.href=u;a.download="lesas-book-"+TODAY+".json";a.click();URL.revokeObjectURL(u)};
+  const doImport=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=ev=>{try{const d=JSON.parse(ev.target.result);if(d.habits&&d.checkins){Object.keys(d).forEach(k=>SS(k,d[k]));window.location.reload()}}catch{}};r.readAsText(f)};
+
+  return h('div',{style:pg},
+    h('section',{style:card},h('div',{style:{display:"flex",alignItems:"center",gap:14}},h('div',{style:{width:48,height:48,borderRadius:"50%",backgroundColor:C.warmL,color:C.warm,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,fontWeight:600,fontFamily:"'Playfair Display',Georgia,serif"}},"L"),h('div',null,h('div',{style:{fontSize:16,fontWeight:600}},"Lesa's Book"),h('div',{style:{fontSize:11,color:C.tx3,fontFamily:ftJp}},"レサの手帳")))),
+    h('section',{style:card},
+      h('div',{style:cardHead},h('span',{style:{fontSize:14,fontWeight:600}},"提醒"),h('span',{style:{fontSize:10,color:C.tx3,fontFamily:ftJp}},"リマインダー")),
+      h('div',{style:{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 0"}},h('span',{style:{fontSize:12,color:C.tx2}},"提醒时间"),h('input',{type:"time",value:st.settings.reminderTime,style:{padding:"5px 8px",border:"1px solid "+C.bdr,borderRadius:6,fontSize:12,fontFamily:ft,color:C.tx,backgroundColor:C.bg},onChange:e=>up(s=>({...s,settings:{...s.settings,reminderTime:e.target.value}}))})),
+      h('div',{style:{fontSize:10,color:C.tx3,fontStyle:"italic",marginTop:4}},"PWA部署后可启用推送提醒")
+    ),
+    h('section',{style:card},
+      h('div',{style:cardHead},h('span',{style:{fontSize:14,fontWeight:600}},"数据"),h('span',{style:{fontSize:10,color:C.tx3,fontFamily:ftJp}},"データ")),
+      h('button',{style:{width:"100%",padding:12,fontSize:13,backgroundColor:C.acc,color:"#fff",border:"none",borderRadius:10,cursor:"pointer",fontFamily:ft,fontWeight:500,marginBottom:8},onClick:doExport},"导出备份 · バックアップ"),
+      h('button',{style:{width:"100%",padding:12,fontSize:12,backgroundColor:"transparent",color:C.tx2,border:"1px dashed "+C.bdr,borderRadius:10,cursor:"pointer",fontFamily:ft},onClick:()=>importRef.current?.click()},"导入数据 · インポート"),
+      h('input',{ref:importRef,type:"file",accept:".json",style:{display:"none"},onChange:doImport})
+    ),
+    h('div',{style:{textAlign:"center",padding:"28px 16px 12px"}},
+      h('div',{style:{fontSize:13,color:C.warm,fontStyle:"italic",lineHeight:1.6}},'"断了不归零，碰了就算数"'),
+      h('div',{style:{fontSize:11,color:C.tx3,fontFamily:ftJp,marginTop:4}},'"途切れてもゼロにならない、触れただけでもカウント"')
+    )
+  );
+}
+
+/* ═══ Mount & SW ═══ */
+ReactDOM.createRoot(document.getElementById('app')).render(h(App));
+if('serviceWorker' in navigator){navigator.serviceWorker.register('./sw.js').catch(()=>{})}
+</script>
+</body>
+</html>
